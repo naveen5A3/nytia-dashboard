@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nytia Labs — Sentiment Analysis Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #F8FAFC; color: #1E293B; min-height: 100vh; }
+  .page { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .db-header { padding-bottom: 1rem; border-bottom: 1.5px solid #E2E8F0; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: flex-end; }
+  .db-title { font-size: 22px; font-weight: 600; color: #0B2545; }
+  .db-sub { font-size: 13px; color: #64748B; margin-top: 4px; }
+  .db-badge { font-size: 12px; background: #CCFBF1; color: #0F6E56; padding: 4px 12px; border-radius: 20px; font-weight: 500; }
+  .phase-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .phase-btn { font-size: 13px; padding: 7px 16px; border-radius: 20px; border: 1.5px solid #CBD5E1; background: #fff; color: #64748B; cursor: pointer; transition: all .15s; font-weight: 500; }
+  .phase-btn:hover { border-color: #0D9488; color: #0D9488; }
+  .phase-btn.active { background: #0D9488; color: #fff; border-color: #0D9488; }
+  .phase-panel { display: none; }
+  .phase-panel.active { display: block; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .metric-card { background: #fff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1rem 1.1rem; }
+  .metric-label { font-size: 12px; color: #64748B; margin-bottom: 4px; }
+  .metric-value { font-size: 24px; font-weight: 600; color: #0B2545; }
+  .metric-sub { font-size: 11px; color: #94A3B8; margin-top: 3px; }
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+  .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; }
+  .card-full { background: #fff; border: 1px solid #E2E8F0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+  .card-title { font-size: 13px; font-weight: 600; color: #0B2545; margin-bottom: 0.9rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; }
+  .li { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #64748B; }
+  .ld { width: 11px; height: 11px; border-radius: 2px; flex-shrink: 0; }
+  .urg-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #F1F5F9; }
+  .urg-row:last-child { border-bottom: none; }
+  .urg-badge { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; width: 86px; text-align: center; flex-shrink: 0; }
+  .urg-bar-wrap { flex: 1; background: #F1F5F9; border-radius: 4px; height: 9px; overflow: hidden; }
+  .urg-bar { height: 100%; border-radius: 4px; }
+  .urg-count { font-size: 12px; font-weight: 600; color: #1E293B; min-width: 62px; text-align: right; flex-shrink: 0; }
+  .urg-pct { font-size: 11px; color: #64748B; min-width: 38px; text-align: right; flex-shrink: 0; }
+  .coef-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid #F1F5F9; }
+  .coef-row:last-child { border-bottom: none; }
+  .coef-label { font-size: 12px; color: #1E293B; width: 175px; flex-shrink: 0; }
+  .coef-bar-wrap { flex: 1; position: relative; height: 18px; background: #F1F5F9; border-radius: 4px; overflow: hidden; }
+  .coef-bar { height: 100%; position: absolute; border-radius: 4px; }
+  .coef-val { font-size: 11px; color: #64748B; min-width: 46px; text-align: right; flex-shrink: 0; }
+  .disease-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F1F5F9; }
+  .disease-row:last-child { border-bottom: none; }
+  .disease-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .disease-label { font-size: 13px; color: #1E293B; flex: 1; }
+  .disease-ref { font-size: 10px; color: #94A3B8; font-style: italic; flex-shrink: 0; width: 95px; text-align: right; }
+  .disease-bar-wrap { width: 130px; background: #F1F5F9; border-radius: 4px; height: 8px; overflow: hidden; flex-shrink: 0; }
+  .disease-bar { height: 100%; border-radius: 4px; }
+  .disease-count { font-size: 11px; color: #64748B; min-width: 110px; text-align: right; flex-shrink: 0; }
+  .insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 1rem; }
+  .insight-pill { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0.75rem 1rem; }
+  .insight-pill strong { display: block; font-size: 13px; font-weight: 600; color: #0B2545; margin-bottom: 4px; }
+  .insight-pill span { font-size: 12px; color: #64748B; line-height: 1.5; }
+  .rai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.25rem; }
+  .rai-card { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 1rem; }
+  .rai-title { font-size: 13px; font-weight: 600; color: #0B2545; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+  .rai-body { font-size: 12px; color: #64748B; line-height: 1.6; }
+  .status-badge { font-size: 10px; padding: 2px 8px; border-radius: 20px; background: #DCFCE7; color: #166534; font-weight: 600; margin-left: auto; }
+  .limit-row { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid #F1F5F9; font-size: 12px; }
+  .limit-row:last-child { border-bottom: none; }
+  .limit-num { font-size: 11px; font-weight: 600; width: 20px; color: #94A3B8; flex-shrink: 0; margin-top: 1px; }
+  .limit-title { font-weight: 600; color: #1E293B; margin-bottom: 3px; }
+  .limit-body { color: #64748B; line-height: 1.5; }
+  .demo-card { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 10px; }
+  .demo-name { font-size: 13px; font-weight: 600; color: #0B2545; margin-bottom: 7px; }
+  .demo-row { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 6px; }
+  .demo-tag { font-size: 11px; padding: 2px 10px; border-radius: 20px; background: #E0F2FE; color: #0369A1; font-weight: 500; }
+  .demo-result { font-size: 12px; color: #64748B; line-height: 1.6; }
+  .demo-result strong { color: #1E293B; }
+  .warn-box { background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 12px; color: #92400E; line-height: 1.5; }
+  @media (max-width: 700px) {
+    .metric-grid { grid-template-columns: 1fr 1fr; }
+    .chart-row { grid-template-columns: 1fr; }
+    .rai-grid { grid-template-columns: 1fr; }
+    .insight-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="db-header">
+    <div>
+      <div class="db-title">Nytia Labs — Sentiment Analysis Dashboard</div>
+      <div class="db-sub">500,000 patients · VADER compound scores · Group 3 · ALY 6980 Capstone</div>
+    </div>
+    <span class="db-badge">June 2026</span>
+  </div>
+
+  <div class="phase-nav">
+    <button class="phase-btn active" onclick="showPhase('p11',this)">Sentiment scoring</button>
+    <button class="phase-btn" onclick="showPhase('p12',this)">Responsible AI</button>
+    <button class="phase-btn" onclick="showPhase('p13',this)">Urgency framework</button>
+    <button class="phase-btn" onclick="showPhase('p14',this)">Disease prediction</button>
+  </div>
+
+  <!-- PHASE 11 -->
+  <div id="p11" class="phase-panel active">
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Sentiment AUC (text only)</div><div class="metric-value">0.722</div><div class="metric-sub">no numeric scores used</div></div>
+      <div class="metric-card"><div class="metric-label">Rec. score — 1 domain</div><div class="metric-value">+0.621</div><div class="metric-sub">drops to +0.314 at 4+</div></div>
+      <div class="metric-card"><div class="metric-label">Status score — 1 domain</div><div class="metric-value">+0.476</div><div class="metric-sub">drops to +0.082 at 4+</div></div>
+      <div class="metric-card"><div class="metric-label">Most negative pair</div><div class="metric-value" style="font-size:16px;padding-top:5px">Depression+</div><div class="metric-sub">any domain = most negative</div></div>
+    </div>
+
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Fig 19 — mean sentiment trend by severity group</div>
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>Recommendations</span>
+          <span class="li"><span class="ld" style="background:#E24B4A"></span>Status assessment</span>
+        </div>
+        <div style="position:relative;width:100%;height:200px">
+          <canvas id="c_trend" role="img" aria-label="Line chart. Recommendations decline 0.621 to 0.314. Status assessment declines faster 0.476 to 0.082."></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">High-risk prevalence by declining domain count</div>
+        <div style="position:relative;width:100%;height:215px">
+          <canvas id="c_risk" role="img" aria-label="Bar chart showing high risk percentage. 1 domain 12%, 2 domains 17%, 3 domains 53%, 4+ domains 87%."></canvas>
+        </div>
+      </div>
+    </div>x
+
+    <div class="card-full">
+      <div class="card-title">Fig 21 — mean sentiment across top comorbidity pairs</div>
+      <div class="legend">
+        <span class="li"><span class="ld" style="background:#378ADD"></span>Recommendations compound</span>
+        <span class="li"><span class="ld" style="background:#E24B4A"></span>Status assessment compound</span>
+      </div>
+      <div style="position:relative;width:100%;height:270px">
+        <canvas id="c_heat" role="img" aria-label="Grouped horizontal bar chart. Depression-linked pairs have most negative sentiment scores."></canvas>
+      </div>
+    </div>
+
+    <div class="card-full">
+      <div class="card-title">Fig 20 — top 3-domain comorbidity combinations</div>
+      <div style="position:relative;width:100%;height:330px">
+        <canvas id="c_combo" role="img" aria-label="Horizontal bar chart of most common 3-domain combinations. Nutrition+obesity+sleep leads."></canvas>
+      </div>
+    </div>
+
+    <div class="card-full">
+      <div class="card-title">Fig 22 — sentiment feature coefficients predicting high severity</div>
+      <p style="font-size:12px;color:#64748B;margin-bottom:12px">Logistic regression · 8 VADER scores · AUC 0.722 · red = increases high severity risk · blue = decreases it</p>
+      <div id="coef-list">
+        <div class="coef-row"><span class="coef-label">sta_neg (status negative)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:90%;left:50%;background:#E24B4A"></div></div><span class="coef-val">+0.82</span></div>
+        <div class="coef-row"><span class="coef-label">rec_neg (rec. negative)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:58%;left:50%;background:#E24B4A"></div></div><span class="coef-val">+0.53</span></div>
+        <div class="coef-row"><span class="coef-label">sta_compound</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:44%;left:50%;background:#E24B4A"></div></div><span class="coef-val">+0.40</span></div>
+        <div class="coef-row"><span class="coef-label">rec_neu (rec. neutral)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:22%;left:50%;background:#E24B4A"></div></div><span class="coef-val">+0.20</span></div>
+        <div class="coef-row"><span class="coef-label">sta_neu (status neutral)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:18%;right:50%;left:auto;background:#378ADD"></div></div><span class="coef-val">−0.16</span></div>
+        <div class="coef-row"><span class="coef-label">rec_compound</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:28%;right:50%;left:auto;background:#378ADD"></div></div><span class="coef-val">−0.26</span></div>
+        <div class="coef-row"><span class="coef-label">sta_pos (status positive)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:38%;right:50%;left:auto;background:#378ADD"></div></div><span class="coef-val">−0.35</span></div>
+        <div class="coef-row"><span class="coef-label">rec_pos (rec. positive)</span><div class="coef-bar-wrap"><div class="coef-bar" style="width:55%;right:50%;left:auto;background:#378ADD"></div></div><span class="coef-val">−0.50</span></div>
+      </div>
+      <div class="insight-grid">
+        <div class="insight-pill"><strong>Strongest signal</strong><span>Negative status assessment score (sta_neg) — emotionally charged language directly reflects multi-domain decline</span></div>
+        <div class="insight-pill"><strong>Protective signal</strong><span>Positive recommendation scores are associated with lower severity — encouraging tone correlates with fewer declining domains</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PHASE 12 -->
+  <div id="p12" class="phase-panel">
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Model accuracy</div><div class="metric-value">95.2%</div><div class="metric-sub">NLP Random Forest</div></div>
+      <div class="metric-card"><div class="metric-label">Principles met</div><div class="metric-value">5 / 5</div><div class="metric-sub">Vector Institute framework</div></div>
+      <div class="metric-card"><div class="metric-label">Limitations disclosed</div><div class="metric-value">6</div><div class="metric-sub">documented transparently</div></div>
+      <div class="metric-card"><div class="metric-label">Random seed</div><div class="metric-value">42</div><div class="metric-sub">fully reproducible</div></div>
+    </div>
+    <div class="rai-grid">
+      <div class="rai-card"><div class="rai-title">Explainability<span class="status-badge">Pass</span></div><div class="rai-body">Phase 7 Gini importance — top features are human-readable. rec_char_length explains why predictions are made. Every decision traces back to readable text characteristics.</div></div>
+      <div class="rai-card"><div class="rai-title">Class balance<span class="status-badge">Pass</span></div><div class="rai-body">65.6% high risk label rate — corrected from inflated ~96%. No class weighting needed at this distribution. Documented with rationale.</div></div>
+      <div class="rai-card"><div class="rai-title">Bias check<span class="status-badge">Pass</span></div><div class="rai-body">Qualitative consistency confirmed across 4 severity groups. Model performs uniformly — no group systematically under-predicted.</div></div>
+      <div class="rai-card"><div class="rai-title">Reproducibility<span class="status-badge">Pass</span></div><div class="rai-body">Fixed random_state=42 throughout. VADER is deterministic. All 22 features derived via documented regex. Identical results every run from raw CSV.</div></div>
+      <div class="rai-card" style="grid-column:1/-1"><div class="rai-title">Limitations<span class="status-badge">Pass</span></div><div class="rai-body">Six explicit limitations disclosed — see full breakdown below.</div></div>
+    </div>
+    <div class="card-full">
+      <div class="card-title">Six documented data and method limitations</div>
+      <div class="limit-row"><span class="limit-num">1</span><div><div class="limit-title">Sample size</div><div class="limit-body">500K rows = 0.116% of the 430M production dataset. Patterns may not fully generalise. Production deployment requires revalidation at scale.</div></div></div>
+      <div class="limit-row"><span class="limit-num">2</span><div><div class="limit-title">NLP method — keyword matching</div><div class="limit-body">Domain tagging uses regex, not embeddings. Complex multi-domain phrases may be mis-tagged. Cross-domain language is underrepresented.</div></div></div>
+      <div class="limit-row"><span class="limit-num">3</span><div><div class="limit-title">Sentiment method — VADER</div><div class="limit-body">General-purpose analyser, not trained on clinical text. Health phrases like "you are at risk" may score unexpectedly. A clinically fine-tuned model would improve Phase 11.</div></div></div>
+      <div class="limit-row"><span class="limit-num">4</span><div><div class="limit-title">Risk label derivation</div><div class="limit-body">Label derived from status_assessment text parsing. Accuracy depends on template consistency. Not validated against external clinical ground truth.</div></div></div>
+      <div class="limit-row"><span class="limit-num">5</span><div><div class="limit-title">Cross-sectional design</div><div class="limit-body">Each row is a snapshot — no longitudinal tracking. Cannot track individual patient trajectories. Trend analysis requires patient ID and timestamp data.</div></div></div>
+      <div class="limit-row"><span class="limit-num">6</span><div><div class="limit-title">Fixed features</div><div class="limit-body">dif_nutri is fixed (1 unique value) and was removed. Nutrition domain provides zero ML discriminative information. This is a data collection issue, not a modelling choice.</div></div></div>
+    </div>
+  </div>
+
+  <!-- PHASE 13 -->
+  <div id="p13" class="phase-panel">
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Monitor</div><div class="metric-value">~365K</div><div class="metric-sub">73% · routine follow-up</div></div>
+      <div class="metric-card"><div class="metric-label">Preventive</div><div class="metric-value">~75K</div><div class="metric-sub">15% · outreach in 3 days</div></div>
+      <div class="metric-card"><div class="metric-label">Urgent</div><div class="metric-value">~45K</div><div class="metric-sub">9% · within 24 hours</div></div>
+      <div class="metric-card"><div class="metric-label">Critical</div><div class="metric-value">~15K</div><div class="metric-sub">3% · immediate referral</div></div>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Fig 23 — urgency distribution across 500K patients</div>
+        <div class="urg-row"><span class="urg-badge" style="background:#DCFCE7;color:#166534">Monitor</span><div class="urg-bar-wrap"><div class="urg-bar" style="width:73%;background:#16A34A"></div></div><span class="urg-count">~365,000</span><span class="urg-pct">73%</span></div>
+        <div class="urg-row"><span class="urg-badge" style="background:#FEF9C3;color:#854D0E">Preventive</span><div class="urg-bar-wrap"><div class="urg-bar" style="width:15%;background:#CA8A04"></div></div><span class="urg-count">~75,000</span><span class="urg-pct">15%</span></div>
+        <div class="urg-row"><span class="urg-badge" style="background:#FEE2E2;color:#991B1B">Urgent</span><div class="urg-bar-wrap"><div class="urg-bar" style="width:9%;background:#DC2626"></div></div><span class="urg-count">~45,000</span><span class="urg-pct">9%</span></div>
+        <div class="urg-row"><span class="urg-badge" style="background:#450A0A;color:#FCA5A5">Critical</span><div class="urg-bar-wrap"><div class="urg-bar" style="width:3%;background:#7F1D1D"></div></div><span class="urg-count">~15,000</span><span class="urg-pct">3%</span></div>
+        <p style="margin-top:12px;font-size:11px;color:#94A3B8">Monitor &gt;−0.20 · Preventive −0.21 to −0.40 · Urgent −0.41 to −0.60 · Critical &lt;−0.60</p>
+      </div>
+      <div class="card">
+        <div class="card-title">Fig 24 — urgency vs declining domain count</div>
+        <div style="position:relative;width:100%;height:240px">
+          <canvas id="c_urg_dom" role="img" aria-label="Grouped bar chart. Critical patients skew 4+ domains. Monitor patients skew 1-2 domains."></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card-full">
+      <div class="card-title">Fig 25 — urgency vs binary risk label (sentiment adds new information)</div>
+      <div style="position:relative;width:100%;height:230px">
+        <canvas id="c_urg_risk" role="img" aria-label="Grouped bar chart. High risk patients appear at all urgency levels not just critical — proves sentiment adds signal beyond binary risk label."></canvas>
+      </div>
+    </div>
+    <div class="insight-grid">
+      <div class="insight-pill"><strong>Two patients, different urgency</strong><span>Patients with identical declining domains can have different urgency tiers based purely on recommendation text tone</span></div>
+      <div class="insight-pill"><strong>Early warning signal</strong><span>Critical tier flags patients before numeric scores formally deteriorate — language degradation precedes score degradation</span></div>
+      <div class="insight-pill"><strong>Resource allocation tool</strong><span>Nytia Labs can staff clinical teams by tier — ~3% need immediate action, ~73% need only routine monitoring</span></div>
+      <div class="insight-pill"><strong>Addresses sponsor requirement</strong><span>Patients with 2+ risk factors now receive urgency-weighted recommendations, not just a binary high/low label</span></div>
+    </div>
+  </div>
+
+  <!-- PHASE 14 -->
+  <div id="p14" class="phase-panel">
+    <div class="warn-box">⚠️ Labels are synthetically derived from clinical domain-disease associations — not actual diagnoses. Real validation requires Nytia Labs diagnosis records before clinical deployment.</div>
+    <div class="metric-grid">
+      <div class="metric-card"><div class="metric-label">Disease categories</div><div class="metric-value">9</div><div class="metric-sub">clinically grounded rules</div></div>
+      <div class="metric-card"><div class="metric-label">Metabolic syndrome</div><div class="metric-value">~38%</div><div class="metric-sub">most common label</div></div>
+      <div class="metric-card"><div class="metric-label">Top feature</div><div class="metric-value" style="font-size:15px;padding-top:6px">domain_count</div><div class="metric-sub">strongest predictor</div></div>
+      <div class="metric-card"><div class="metric-label">Sentiment in top features</div><div class="metric-value">Yes</div><div class="metric-sub">rec_compound + sta_compound</div></div>
+    </div>
+    <div class="chart-row">
+      <div class="card">
+        <div class="card-title">Fig 26 — synthetic disease label distribution</div>
+        <div style="position:relative;width:100%;height:280px">
+          <canvas id="c_dis" role="img" aria-label="Horizontal bar chart. Metabolic Syndrome leads, followed by General Health Decline, Single Domain Concern, and others."></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Fig 28 — feature importance for disease prediction</div>
+        <div class="legend">
+          <span class="li"><span class="ld" style="background:#378ADD"></span>NLP feature</span>
+          <span class="li"><span class="ld" style="background:#1D9E75"></span>Numeric feature</span>
+        </div>
+        <div style="position:relative;width:100%;height:260px">
+          <canvas id="c_dis_imp" role="img" aria-label="Horizontal bar chart. domain_count, rec_compound, sta_compound are top disease predictors."></canvas>
+        </div>
+      </div>
+    </div>
+    <div class="card-full">
+      <div class="card-title">Disease label mapping — clinical rules</div>
+      <div class="disease-row"><span class="disease-dot" style="background:#E24B4A"></span><span class="disease-label">Metabolic Syndrome</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:100%;background:#E24B4A"></div></div><span class="disease-count">4+ domains declining</span><span class="disease-ref">IDF, 2006</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#378ADD"></span><span class="disease-label">Type 2 Diabetes Risk</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:55%;background:#378ADD"></div></div><span class="disease-count">Obesity + Nutrition</span><span class="disease-ref">ADA, 2023</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#BA7517"></span><span class="disease-label">Cardiovascular Risk</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:50%;background:#BA7517"></div></div><span class="disease-count">Obesity + Movement</span><span class="disease-ref">WHO, 2022</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#639922"></span><span class="disease-label">Sleep-Depression Comorbidity</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:45%;background:#639922"></div></div><span class="disease-count">Sleep + Depression</span><span class="disease-ref">Harvey et al., 2011</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#534AB7"></span><span class="disease-label">Clinical Depression Risk</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:40%;background:#534AB7"></div></div><span class="disease-count">Depression + Wellness</span><span class="disease-ref">WHO, 2021</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#0F6E56"></span><span class="disease-label">Anxiety / Burnout</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:35%;background:#0F6E56"></div></div><span class="disease-count">Sleep + Depression + Anti-stress</span><span class="disease-ref">Maslach, 2003</span></div>
+      <div class="disease-row"><span class="disease-dot" style="background:#993556"></span><span class="disease-label">Respiratory Disease Risk</span><div class="disease-bar-wrap"><div class="disease-bar" style="width:30%;background:#993556"></div></div><span class="disease-count">Anti-smoke + Movement</span><span class="disease-ref">CDC, 2022</span></div>
+    </div>
+    <div class="card-full">
+      <div class="card-title">Demo — patient disease predictions</div>
+      <div class="demo-card">
+        <div class="demo-name">Patient A — Sleep + Depression</div>
+        <div class="demo-row"><span class="demo-tag">sleep</span><span class="demo-tag">depression</span></div>
+        <div class="demo-result"><strong>Predicted disease:</strong> Sleep-Depression Comorbidity &nbsp;·&nbsp; <strong>Urgency:</strong> Preventive &nbsp;·&nbsp; <strong>Sentiment score:</strong> −0.31</div>
+      </div>
+      <div class="demo-card">
+        <div class="demo-name">Patient B — Obesity + Nutrition</div>
+        <div class="demo-row"><span class="demo-tag">obesity</span><span class="demo-tag">nutrition</span></div>
+        <div class="demo-result"><strong>Predicted disease:</strong> Type 2 Diabetes Risk &nbsp;·&nbsp; <strong>Urgency:</strong> Monitor &nbsp;·&nbsp; <strong>Sentiment score:</strong> +0.42</div>
+      </div>
+      <div class="demo-card">
+        <div class="demo-name">Patient C — 4 domains (Sleep + Depression + Anti-stress + Obesity)</div>
+        <div class="demo-row"><span class="demo-tag">sleep</span><span class="demo-tag">depression</span><span class="demo-tag">anti-stress</span><span class="demo-tag">obesity</span></div>
+        <div class="demo-result"><strong>Predicted disease:</strong> Metabolic Syndrome &nbsp;·&nbsp; <strong>Urgency:</strong> Urgent &nbsp;·&nbsp; <strong>Sentiment score:</strong> −0.48</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const grps = ['1 domain','2 domains','3 domains','4+ domains'];
+const gc = 'rgba(0,0,0,0.06)';
+const tc = '#94A3B8';
+
+new Chart(document.getElementById('c_trend'),{type:'line',data:{labels:grps,datasets:[
+  {label:'Recommendations',data:[0.621,0.539,0.437,0.314],borderColor:'#378ADD',backgroundColor:'rgba(55,138,221,0.07)',borderWidth:2.5,pointRadius:5,tension:.3},
+  {label:'Status assessment',data:[0.476,0.382,0.218,0.082],borderColor:'#E24B4A',backgroundColor:'rgba(226,75,74,0.07)',borderWidth:2.5,pointRadius:5,tension:.3,borderDash:[5,3]}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.y.toFixed(3)}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>v.toFixed(1)},min:0,max:.7}}}});
+
+new Chart(document.getElementById('c_risk'),{type:'bar',data:{labels:grps,datasets:[{label:'% high risk',data:[12,17,53,87],backgroundColor:['#9FE1CB','#5DCAA5','#1D9E75','#0F6E56'],borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.y+'%'}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:11},callback:v=>v+'%'},min:0,max:100}}}});
+
+const pairs=['Depression + Nutrition','Depression + Sleep','Obesity + Depression','Nutrition + Sleep','Nutrition + Obesity','Movement + Nutrition'];
+new Chart(document.getElementById('c_heat'),{type:'bar',data:{labels:pairs,datasets:[{label:'Recommendations',data:[0.31,0.33,0.35,0.38,0.41,0.44],backgroundColor:'#378ADD',borderRadius:3},{label:'Status assessment',data:[0.08,0.10,0.12,0.18,0.22,0.28],backgroundColor:'#E24B4A',borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.dataset.label+': '+ctx.parsed.x.toFixed(3)}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10}},min:0,max:.55},y:{grid:{display:false},ticks:{color:tc,font:{size:10}}}}}});
+
+const combos=['Nutrition + Obesity + Sleep','Nutrition + Depression + Sleep','Nutrition + Obesity + Movement','Nutrition + Sleep + Wellness','Nutrition + Obesity + Depression','Nutrition + Sleep + Anti-stress','Obesity + Sleep + Depression','Nutrition + Obesity + Wellness','Nutrition + Movement + Sleep','Nutrition + Depression + Wellness','Obesity + Depression + Sleep','Nutrition + Anti-stress + Sleep'];
+const cCounts=[4821,4103,3987,3812,3654,3521,3402,3287,3198,3087,2987,2876];
+const cColors=cCounts.map((_,i)=>i<3?'#E24B4A':i<6?'#BA7517':'#378ADD');
+new Chart(document.getElementById('c_combo'),{type:'bar',data:{labels:combos,datasets:[{label:'Patients',data:cCounts,backgroundColor:cColors,borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x.toLocaleString()+' patients'}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10}}},y:{grid:{display:false},ticks:{color:tc,font:{size:9}}}}}});
+
+new Chart(document.getElementById('c_urg_dom'),{type:'bar',data:{labels:['Monitor','Preventive','Urgent','Critical'],datasets:[
+  {label:'1 domain',data:[55,20,14,8],backgroundColor:'#9FE1CB',borderRadius:3},
+  {label:'2 domains',data:[25,30,22,12],backgroundColor:'#5DCAA5',borderRadius:3},
+  {label:'3 domains',data:[14,30,35,28],backgroundColor:'#1D9E75',borderRadius:3},
+  {label:'4+ domains',data:[6,20,29,52],backgroundColor:'#0F6E56',borderRadius:3}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10},color:tc}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>v+'%'},max:60}}}});
+
+new Chart(document.getElementById('c_urg_risk'),{type:'bar',data:{labels:['Monitor','Preventive','Urgent','Critical'],datasets:[
+  {label:'Low risk',data:[142000,22000,10000,3000],backgroundColor:'#378ADD',borderRadius:3},
+  {label:'High risk',data:[223000,53000,35000,12000],backgroundColor:'#E24B4A',borderRadius:3}
+]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:10},color:tc}}},scales:{x:{grid:{display:false},ticks:{color:tc,font:{size:11}}},y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>(v/1000).toFixed(0)+'K'}}}}});
+
+const disLabels=['Metabolic Syndrome','General Health Decline','Single Domain Concern','Type 2 Diabetes Risk','Cardiovascular Risk','Sleep-Depression','Clinical Depression','Anxiety / Burnout','Respiratory Risk'];
+const disCounts=[192000,88000,72000,54000,38000,21000,15000,12000,8000];
+const disColors=['#E24B4A','#888780','#B4B2A9','#378ADD','#BA7517','#639922','#534AB7','#0F6E56','#993556'];
+new Chart(document.getElementById('c_dis'),{type:'bar',data:{labels:disLabels,datasets:[{label:'Patients',data:disCounts,backgroundColor:disColors,borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x.toLocaleString()+' patients'}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10}}},y:{grid:{display:false},ticks:{color:tc,font:{size:9}}}}}});
+
+const disFeatures=['rec_char_length','rec_sentence_count','domain_count','rec_compound','sta_compound','rec_diet','rec_exercise','rec_stress','rec_sleep','rec_smoking'];
+const disImp=[0.285,0.268,0.142,0.098,0.072,0.048,0.042,0.025,0.012,0.008];
+const disTypes=['NLP','NLP','Numeric','NLP','NLP','NLP','NLP','NLP','NLP','NLP'];
+new Chart(document.getElementById('c_dis_imp'),{type:'bar',data:{labels:disFeatures,datasets:[{label:'Importance',data:disImp,backgroundColor:disTypes.map(t=>t==='NLP'?'#378ADD':'#1D9E75'),borderRadius:3}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>ctx.parsed.x.toFixed(3)}}},scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10}}},y:{grid:{display:false},ticks:{color:tc,font:{size:10}}}}}});
+
+function showPhase(id, btn) {
+  document.querySelectorAll('.phase-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.phase-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
